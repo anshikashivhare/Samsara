@@ -1,0 +1,6 @@
+time_step_hours: 1
+forecast_hours: 48
+particle_count: 500
+windage_factor: 0.03
+current_scale: 1.0
+wind_scale: 1.0
