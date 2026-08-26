@@ -1,150 +1,61 @@
 # Samsara 🌊
 
-Samsara is an AI-assisted maritime oil-spill investigation platform that combines satellite imagery, computer vision, ocean drift simulation, AIS trajectory analysis, geospatial processing, and an interactive investigation dashboard.
+Samsara is an AI-assisted maritime oil-spill investigation platform combining satellite computer vision, ocean drift modelling, AIS trajectory analysis, geospatial processing, explainable vessel attribution, and an interactive dashboard.
 
-## Core workflow
+## End-to-end workflow
 
 ```text
 Satellite SAR / optical imagery
-          │
-          ▼
-   Image preprocessing
-          │
-          ▼
-   U-Net spill segmentation ──────► Oil-spill polygons
-          │                                  │
-          │                                  ▼
-          │                         PostGIS investigation DB
-          │                                  ▲
-          ▼                                  │
- Ocean / wind data ──► Drift simulation ─────┤
-                                             │
- AIS positions ──► trajectories ──► anomaly detection
-                                             │
-                                             ▼
-                                  suspect vessel ranking
-                                             │
-                                             ▼
-                              React + MapLibre dashboard
+        ↓
+Preprocessing → U-Net segmentation → spill mask → GeoJSON/PostGIS polygon
+        ↓
+Ocean currents + wind → drift forecast / hindcast → probable origin zones
+        ↓
+AIS ingestion → cleaning → trajectories → features → DBSCAN anomalies
+        ↓
+Spatial + temporal + trajectory + behaviour + drift evidence
+        ↓
+Explainable vessel ranking
+        ↓
+FastAPI → React + MapLibre + Recharts investigation dashboard
 ```
 
 ## Technology stack
 
-### AI / satellite processing
-- Python
-- PyTorch
-- U-Net
-- OpenCV
-- Rasterio
-- NumPy
-
-### Data & ML
-- Pandas
-- GeoPandas
-- Shapely
-- Scikit-learn / DBSCAN
-- XGBoost (optional ranking model)
-- Matplotlib
-
-### Geospatial
-- PostGIS
-- PyProj
-- GeoJSON
-- MapLibre GL JS
-
-### Ocean modelling
-- xarray
-- NumPy / SciPy
-- Public ocean-current and wind/weather datasets
-- Copernicus Marine can be integrated as a production data source
-
-### Application
-- FastAPI + Python
-- React + TypeScript
-- Recharts
-- PostgreSQL + PostGIS
-
-### DevOps
-- Git + GitHub
-- Docker
-- Docker Compose
+Python, FastAPI, PyTorch, U-Net, OpenCV, Rasterio, NumPy, Pandas, GeoPandas, Shapely, PyProj, Scikit-learn/DBSCAN, XGBoost-ready architecture, Matplotlib, xarray, SciPy, PostgreSQL/PostGIS, React/TypeScript, MapLibre GL JS, Recharts, Docker and Docker Compose.
 
 ## Repository structure
 
 ```text
 Samsara/
-├── backend/                 # FastAPI service
-│   ├── app/
-│   │   ├── api/             # API routes
-│   │   ├── core/            # configuration
-│   │   ├── models/          # domain models
-│   │   ├── schemas/         # request/response schemas
-│   │   ├── services/        # business logic
-│   │   └── main.py
-│   └── requirements.txt
-├── frontend/                # React + TypeScript dashboard
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   ├── types/
-│   │   └── App.tsx
-│   └── package.json
-├── ml/                      # satellite CV and vessel ML
-│   ├── segmentation/
-│   ├── preprocessing/
-│   └── anomaly_detection/
-├── ocean_model/             # drift simulation and environmental data
-│   ├── simulation/
-│   └── data/
-├── geospatial/              # reusable GIS utilities
-├── data/                    # local sample data only; large data is gitignored
-├── database/
-│   └── init.sql
-├── docker-compose.yml
-├── .env.example
-└── .gitignore
+├── docs/                   # architecture, methodology, dataset, API, demo
+├── data/                   # raw, processed and small sample datasets
+├── ml/                     # U-Net, preprocessing, training, inference
+├── geospatial/             # satellite and spill geometry utilities
+├── drift/                  # ocean drift forecast/hindcast
+├── ais/                    # AIS ingestion, trajectories and anomalies
+├── attribution/            # candidate generation and evidence scoring
+├── backend/                # FastAPI API, services, models and tests
+├── frontend/               # React dashboard
+├── database/               # PostgreSQL + PostGIS schema and seed
+├── scripts/                # setup, sample data and pipeline runner
+└── tests/                  # project-level tests
 ```
-
-## MVP capabilities
-
-1. Upload or register a satellite raster.
-2. Preprocess the raster with OpenCV/Rasterio.
-3. Run a U-Net inference pipeline to produce an oil-spill mask.
-4. Convert the mask to GeoJSON polygons.
-5. Store spill geometry and investigation metadata in PostGIS.
-6. Load AIS positions and build vessel trajectories.
-7. Detect unusual vessel behaviour with DBSCAN-based features.
-8. Run a drift simulation using currents and wind fields.
-9. Rank candidate vessels using an explainable weighted score, with XGBoost available as an optional future model.
-10. Visualize the spill, predicted origin zones, vessel tracks, scores, and investigation timeline in the React dashboard.
 
 ## Quick start
 
-### Prerequisites
-
-- Docker Desktop
-- Docker Compose
-- Git
-
-### Run
-
 ```bash
-git clone https://github.com/anshikashivhare/Samsara.git
-cd Samsara
 cp .env.example .env
 docker compose up --build
 ```
 
-Frontend: `http://localhost:5173`  
-Backend API: `http://localhost:8000`  
-API docs: `http://localhost:8000/docs`  
-PostgreSQL/PostGIS: `localhost:5432`
+- Dashboard: `http://localhost:5173`
+- API: `http://localhost:8000`
+- Swagger: `http://localhost:8000/docs`
+- PostGIS: `localhost:5432`
 
-## Data sources
+Generate the development AIS fixture with `python scripts/download_sample_data.py`, then run `python scripts/run_pipeline.py`.
 
-The application is designed to accept public satellite, AIS, ocean-current, and weather datasets. Keep downloaded datasets outside Git history when they are large or restricted. Put credentials and service URLs in `.env` and never commit secrets.
+## Important
 
-## Status
-
-This repository is an MVP foundation. Model weights, large satellite rasters, AIS archives, and production credentials are intentionally excluded from Git.
+This repository is a research/MVP foundation. Production use requires validated satellite and oceanographic datasets, trained and evaluated model weights, time-varying environmental forcing, domain calibration, secure authentication, and complete data provenance. Large datasets and secrets must not be committed.
