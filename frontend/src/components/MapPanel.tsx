@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { MapTrifold } from "../lib/icons";
 import { investigation } from "../data/fixtures";
 import type { Coordinate } from "../types/investigation";
+import { useLiveTelemetry } from "../hooks/useLiveTelemetry";
 
 const STYLE_URL = "https://demotiles.maplibre.org/style.json";
 
@@ -88,6 +89,9 @@ interface MapPanelProps {
 export function MapPanel({ height = 480, showLegend = true, showStatus = true }: MapPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MlMap | null>(null);
+  // live marker instances keyed by mmsi
+  const liveMarkersRef = useRef<Map<number, maplibregl.Marker>>(new Map());
+  const live = useLiveTelemetry();
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -202,6 +206,53 @@ export function MapPanel({ height = 480, showLegend = true, showStatus = true }:
     };
   }, []);
 
+  /* ── Live vessel markers (SSE / WebSocket) ─────────────────────
+   * Runs every time `live.vessels` changes. Creates a marker on
+   * first sight; on subsequent ticks just moves it — no flicker,
+   * no layout change.
+   * ─────────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !live.connected || !live.vessels.length) return;
+
+    live.vessels.forEach((v) => {
+      const color = v.risk === "HIGH" ? "#e7a079"
+                  : v.risk === "MEDIUM" ? "#d6b17a"
+                  : "#78939a";
+      const popupHtml = `
+        <div style="font-family:'Fira Code',monospace;font-size:11px;color:#e8f0f2">
+          <strong>${v.mmsi}</strong><br/>${v.name}<br/>
+          score ${v.score} · ${v.risk.toLowerCase()}<br/>
+          <span style="color:#aaa">${v.speed_knots.toFixed(1)} kn · ${v.heading}°</span>
+          ${v.is_dark_vessel ? "<br/><span style='color:#ff3366'>⚠ dark vessel</span>" : ""}
+        </div>`;
+
+      const existing = liveMarkersRef.current.get(v.mmsi);
+      if (existing) {
+        // Smoothly move the existing marker to the new position
+        existing.setLngLat([v.lon, v.lat]);
+        existing.getPopup()?.setHTML(popupHtml);
+      } else {
+        // First time we see this MMSI — create a marker
+        const marker = new maplibregl.Marker({ color })
+          .setLngLat([v.lon, v.lat])
+          .setPopup(
+            new maplibregl.Popup({ closeButton: false, offset: 10 }).setHTML(popupHtml)
+          )
+          .addTo(map);
+        liveMarkersRef.current.set(v.mmsi, marker);
+      }
+    });
+
+    // Remove markers for vessels that disappeared from the feed
+    liveMarkersRef.current.forEach((marker, mmsi) => {
+      if (!live.vessels.find((v) => v.mmsi === mmsi)) {
+        marker.remove();
+        liveMarkersRef.current.delete(mmsi);
+      }
+    });
+  }, [live.vessels, live.connected]);
+
   return (
     <div className="map-panel" style={{ height }} role="region" aria-label="Investigation map">
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
@@ -223,8 +274,8 @@ export function MapPanel({ height = 480, showLegend = true, showStatus = true }:
       )}
       {showStatus && (
         <div className="map-panel__status" aria-hidden="true">
-          <span className="dot" />
-          <span>LIVE · WGS84</span>
+          <span className="dot" style={{ background: live.connected ? "#00f5a0" : "var(--status-inactive)" }} />
+          <span>{live.connected ? `LIVE · ${live.active_vessels_count} vessels` : "LIVE · WGS84"}</span>
           <MapTrifold size={12} weight="duotone" style={{ marginLeft: 6 }} />
         </div>
       )}

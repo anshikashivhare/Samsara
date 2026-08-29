@@ -8,6 +8,7 @@ import { Drawer } from "../components/Drawer";
 import { investigation } from "../data/fixtures";
 import { formatBearing, formatDate, formatKm, formatSpeedKn } from "../data/formatters";
 import type { Vessel } from "../types/investigation";
+import { useLiveTelemetry } from "../hooks/useLiveTelemetry";
 
 type SortKey = "score" | "distance" | "mmsi" | "anomaly";
 
@@ -15,6 +16,9 @@ export function VesselsPage() {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [selected, setSelected] = useState<Vessel | null>(null);
+  // SSE / WebSocket live scores
+  const live = useLiveTelemetry();
+  const liveScoreMap = Object.fromEntries((live.vessels ?? []).map((v) => [String(v.mmsi), v.score]));
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -44,6 +48,19 @@ export function VesselsPage() {
         sub="AI-assisted attribution across spatial, temporal, trajectory, behaviour and drift evidence"
         actions={
           <div className="row" style={{ gap: 8 }}>
+            {/* LIVE / Connecting badge */}
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              fontFamily: "var(--font-mono)", fontSize: 11,
+              padding: "4px 10px", borderRadius: 20,
+              background: live.connected ? "rgba(0,245,160,.08)" : "rgba(255,170,0,.08)",
+              color: live.connected ? "#00f5a0" : "#ffaa00",
+              border: `1px solid ${live.connected ? "rgba(0,245,160,.2)" : "rgba(255,170,0,.2)"}`
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", display: "inline-block",
+                background: live.connected ? "#00f5a0" : "#ffaa00" }} />
+              {live.connected ? `LIVE · ${live.active_vessels_count} active` : "Connecting..."}
+            </span>
             <div className="row" style={{
               background: "var(--panel-data)",
               border: "1px solid var(--border-subtle)",
@@ -92,7 +109,7 @@ export function VesselsPage() {
       <Panel
         title={<>Ranked candidates</>}
         icon={<Anchor weight="duotone" />}
-        meta={<>{rows.length} of {investigation.vessels.length} shown</>}
+        meta={<>{rows.length} of {investigation.vessels.length} shown{live.dark_vessels_count > 0 && <span style={{ marginLeft: 8, color: "#ff3366", fontWeight: 600 }}>· {live.dark_vessels_count} dark</span>}</>}
         tier="data"
         flush
       >
@@ -131,7 +148,7 @@ export function VesselsPage() {
                 <td className="cell-mono">{formatSpeedKn(v.speedKn)}</td>
                 <td>
                   <div style={{ minWidth: 160 }}>
-                    <ScoreBar value={v.score} />
+                    <ScoreBar value={liveScoreMap[v.mmsi] ?? v.score} />
                   </div>
                 </td>
               </tr>

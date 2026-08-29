@@ -10,11 +10,15 @@ import { investigation } from "../data/fixtures";
 import { formatDate, formatKm, formatPercent } from "../data/formatters";
 import { Drawer } from "../components/Drawer";
 import { MapPanel } from "../components/MapPanel";
+import { useLiveTelemetry } from "../hooks/useLiveTelemetry";
 
 export function OverviewPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const top = investigation.vessels[0];
   const inc = investigation.incident;
+  // SSE live stream — updates KPIs and vessel scores every 2.5s without changing the layout
+  const live = useLiveTelemetry();
+  const liveScoreMap = Object.fromEntries((live.vessels ?? []).map((v) => [v.mmsi, v.score]));
 
   return (
     <div className="page">
@@ -22,7 +26,23 @@ export function OverviewPage() {
         eyebrow={<>INVESTIGATION · {inc.id}</>}
         title={<>Oil Spill Investigation</>}
         sub="Satellite detection · AIS correlation · Ocean drift modelling"
-        actions={<StatusPill tone="active">Active</StatusPill>}
+        actions={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              fontFamily: "var(--font-mono)", fontSize: 11,
+              padding: "3px 9px", borderRadius: 20,
+              background: live.connected ? "rgba(0,245,160,.1)" : "rgba(255,170,0,.1)",
+              color: live.connected ? "#00f5a0" : "#ffaa00",
+              border: `1px solid ${live.connected ? "rgba(0,245,160,.25)" : "rgba(255,170,0,.25)"}`
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", display: "inline-block",
+                background: live.connected ? "#00f5a0" : "#ffaa00" }} />
+              {live.connected ? "LIVE · 2.5s" : "Connecting..."}
+            </span>
+            <StatusPill tone="active">Active</StatusPill>
+          </div>
+        }
       />
 
       <section className="grid grid--kpi" aria-label="Key metrics">
@@ -30,19 +50,19 @@ export function OverviewPage() {
           label="Spill area"
           value={`${inc.spillAreaKm2.toFixed(1)} km²`}
           icon={<Drop weight="duotone" />}
-          hint={<><span>↑ </span>1.4 km² in last 6h</>}
+          hint={<><span>↑ </span>{live.spill_drift_rate_knots ? `Drift ${live.spill_drift_rate_knots} kn` : "1.4 km² in last 6h"}</>}
         />
         <KpiCard
           label="Detection confidence"
-          value={formatPercent(inc.detectionConfidence)}
+          value={live.wind_speed_knots ? `${live.wind_speed_knots} kn wind` : formatPercent(inc.detectionConfidence)}
           icon={<Broadcast weight="duotone" />}
-          hint={<>Sentinel-1 SAR</>}
+          hint={live.ocean_current_speed_ms ? <>Current: {live.ocean_current_speed_ms} m/s</> : <>Sentinel-1 SAR</>}
         />
         <KpiCard
           label="Candidate vessels"
-          value={inc.candidateCount}
+          value={live.active_vessels_count ?? inc.candidateCount}
           icon={<Anchor weight="duotone" />}
-          hint={<>12 within 80 km</>}
+          hint={live.dark_vessels_count != null ? <><span style={{color:"#ff3366",fontWeight:600}}>{live.dark_vessels_count} dark ship</span> detected</> : <>12 within 80 km</>}
         />
         <KpiCard
           label="Top suspect"
@@ -95,7 +115,7 @@ export function OverviewPage() {
                 <td className="cell-mono">{formatKm(v.distanceKm)}</td>
                 <td>
                   <div style={{ minWidth: 160 }}>
-                    <ScoreBar value={v.score} />
+                    <ScoreBar value={liveScoreMap[v.mmsi] ?? v.score} />
                   </div>
                 </td>
               </tr>
